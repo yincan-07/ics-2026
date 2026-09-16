@@ -1,0 +1,14 @@
+# C build outputs
+*.o
+data lab/datalab-handout/btest
+data lab/datalab-handout/fshow
+data lab/datalab-handout/ishow
+
+# Temporary and editor files
+*~
+*.swp
+*.swo
+
+# Crash dumps
+core
+core.*
