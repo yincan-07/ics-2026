@@ -189,7 +189,7 @@ int bitXor(int x, int y) {
  *   Rating: 2 
  */
 int leastBitPos(int x) {
-  return x & 0xFF;
+  return x & 1;
 }
 /* 
  * getByte - Extract byte n from word x
@@ -200,7 +200,7 @@ int leastBitPos(int x) {
  *   Rating: 2
  */
 int getByte(int x, int n) {
-  return x&(0xFF<<(n<<3))>>(n<<3);
+  return x&(0xFF<<(n<<3))>>(n<<3)&0xFF;
 }
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
@@ -211,7 +211,7 @@ int getByte(int x, int n) {
  *   Rating: 3
  */
 int logicalShift(int x, int n) {
-  return (x >> n) & ~(-1 << (32 - n));
+  return (x >> n) & ~(~0 << (32 - n));
 }
 /*
  * grayToBinary - convert a 31-bit Gray code to binary (0 <= x <= TMax)
@@ -264,7 +264,7 @@ int bitCount(int x) {
  *   Rating: 2
  */
 int isEqual(int x, int y) {
-  return !!(x^~y);
+  return !!(x^y);
 }
 /* 
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
@@ -275,7 +275,7 @@ int isEqual(int x, int y) {
  *   Rating: 2
  */
 int divpwr2(int x, int n) {
-    return (x + ((x >> 31) & ((1 << n) -1))) >> n ;
+    return (x + ((x >> 31) & ((1 << n) + ~0))) >> n ;
 }
 /* 
  * sign - return 1 if positive, 0 if zero, and -1 if negative
@@ -297,7 +297,7 @@ int sign(int x) {
  *   Rating: 3
  */
 int addOK(int x, int y) {
-  return !!(x^y>>31|x^(x+y)>>31);
+  return !!((x^y)>>31|(x^(x+y))>>31);
 }
 /* 
  * absVal - absolute value of x
@@ -308,7 +308,7 @@ int addOK(int x, int y) {
  *   Rating: 4
  */
 int absVal(int x) {
-  return ~x + 1;
+  return (~x + 1) ^ (x >> 31) + (x >> 31 & 1);
 }
 /*
  * satSub - compute x - y, saturating to Tmax on positive overflow and
