@@ -178,7 +178,7 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  return ~(~(~x&y)&~(~y&x));
 }
 /* 
  * leastBitPos - return a mask that marks the position of the
@@ -189,7 +189,7 @@ int bitXor(int x, int y) {
  *   Rating: 2 
  */
 int leastBitPos(int x) {
-  return 2;
+  return x & 0xFF;
 }
 /* 
  * getByte - Extract byte n from word x
@@ -200,7 +200,7 @@ int leastBitPos(int x) {
  *   Rating: 2
  */
 int getByte(int x, int n) {
-  return 2;
+  return x&(0xFF<<(n<<3))>>(n<<3);
 }
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
@@ -211,7 +211,7 @@ int getByte(int x, int n) {
  *   Rating: 3
  */
 int logicalShift(int x, int n) {
-  return 2;
+  return (x >> n) & ~(-1 << (32 - n));
 }
 /*
  * grayToBinary - convert a 31-bit Gray code to binary (0 <= x <= TMax)
@@ -227,7 +227,14 @@ int logicalShift(int x, int n) {
  *   Rating: 3
  */
 int grayToBinary(int x) {
-  return 2;
+  x ^= x >> 1;
+  x ^= x >> 2;
+  x ^= x >> 4;
+  x ^= x >> 8;
+  x ^= x >> 16;
+  return x;
+  //补充：该题理论上应该采取逻辑右移才能保证题目正确
+  //本题限定正数，故采取算术右移即可
 }
 /*
  * bitCount - returns count of number of 1's in word
@@ -237,7 +244,16 @@ int grayToBinary(int x) {
  *   Rating: 4
  */
 int bitCount(int x) {
-  return 2;
+  x = (x & 0x55555555) + ((x >> 1)  & 0x55555555);
+  x = (x & 0x33333333) + ((x >> 2)  & 0x33333333);
+  x = (x & 0x0F0F0F0F) + ((x >> 4)  & 0x0F0F0F0F);
+  x = (x & 0x00FF00FF) + ((x >> 8)  & 0x00FF00FF);
+  x = (x & 0x0000FFFF) + ((x >> 16) & 0x0000FFFF);
+  return x;
+  /*  
+    思路是将32位整数分为若干组，组内并行计算再合并
+    利用掩码来屏蔽无用位数，并防止结果溢出干扰相邻组，利用移位来对齐
+  */
 }
 // Two's complement arithmetic (rating sum 17)
 /* 
@@ -248,7 +264,7 @@ int bitCount(int x) {
  *   Rating: 2
  */
 int isEqual(int x, int y) {
-  return 2;
+  return !!(x^~y);
 }
 /* 
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
@@ -259,7 +275,7 @@ int isEqual(int x, int y) {
  *   Rating: 2
  */
 int divpwr2(int x, int n) {
-    return 2;
+    return (x + ((x >> 31) & ((1 << n) -1))) >> n ;
 }
 /* 
  * sign - return 1 if positive, 0 if zero, and -1 if negative
@@ -270,7 +286,7 @@ int divpwr2(int x, int n) {
  *  Rating: 2
  */
 int sign(int x) {
-    return 2;
+    return x >> 31 | !!x;
 }
 /* 
  * addOK - Determine if can compute x+y without overflow
@@ -281,7 +297,7 @@ int sign(int x) {
  *   Rating: 3
  */
 int addOK(int x, int y) {
-  return 2;
+  return !!(x^y>>31|x^(x+y)>>31);
 }
 /* 
  * absVal - absolute value of x
@@ -292,7 +308,7 @@ int addOK(int x, int y) {
  *   Rating: 4
  */
 int absVal(int x) {
-  return 2;
+  return ~x + 1;
 }
 /*
  * satSub - compute x - y, saturating to Tmax on positive overflow and
