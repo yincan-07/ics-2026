@@ -189,9 +189,11 @@ int bitXor(int x, int y) {
  *   Rating: 2 
  */
 int leastBitPos(int x) {
-  return x & 1;
+  return x & (~x + 1);
+  //补码的1的最小位是原码的1的最小位
 }
 /* 
+
  * getByte - Extract byte n from word x
  *   Bytes numbered from 0 (LSB) to 3 (MSB)
  *   Examples: getByte(0x12345678,1) = 0x56
@@ -201,6 +203,22 @@ int leastBitPos(int x) {
  */
 int getByte(int x, int n) {
   return x&(0xFF<<(n<<3))>>(n<<3)&0xFF;
+  /*注意优先级问题
+  单目运算符：~、!、++、--、(类型)、sizeof
+  * / %
+  + -（加减）
+  << >>
+  < <= > >=
+  == !=
+  &
+  ^
+  |
+  &&
+  ||
+  ?:（条件运算符）
+  = += -= *= /= %= <<= >>= &= ^= |=（赋值运算符）
+  ,（逗号运算符）
+  */
 }
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
@@ -211,7 +229,13 @@ int getByte(int x, int n) {
  *   Rating: 3
  */
 int logicalShift(int x, int n) {
-  return (x >> n) & ~(~0 << (32 - n));
+  return (x >> n) & ~(((1 << 31) >> n) << 1);
+  /*初次错误答案return (x >> n) & ~(~0 << (32 - n));
+    错误原因：
+    1.32位整数，32-n可能为32，左移32位是未定义行为
+    2.-是禁止使用的运算符
+    ->用先左移再右移规避边界问题
+  */
 }
 /*
  * grayToBinary - convert a 31-bit Gray code to binary (0 <= x <= TMax)
@@ -264,7 +288,7 @@ int bitCount(int x) {
  *   Rating: 2
  */
 int isEqual(int x, int y) {
-  return !!(x^y);
+  return !(x^y);
 }
 /* 
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
@@ -277,6 +301,7 @@ int isEqual(int x, int y) {
 int divpwr2(int x, int n) {
     return (x + ((x >> 31) & ((1 << n) + ~0))) >> n ;
 }
+//负数需要改成向上取整
 /* 
  * sign - return 1 if positive, 0 if zero, and -1 if negative
  *  Examples: sign(130) = 1
