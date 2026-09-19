@@ -202,23 +202,9 @@ int leastBitPos(int x) {
  *   Rating: 2
  */
 int getByte(int x, int n) {
-  return x&(0xFF<<(n<<3))>>(n<<3)&0xFF;
-  /*注意优先级问题
-  单目运算符：~、!、++、--、(类型)、sizeof
-  * / %
-  + -（加减）
-  << >>
-  < <= > >=
-  == !=
-  &
-  ^
-  |
-  &&
-  ||
-  ?:（条件运算符）
-  = += -= *= /= %= <<= >>= &= ^= |=（赋值运算符）
-  ,（逗号运算符）
-  */
+  return (x >> (n << 3)) & 0xFF;
+  /* 先逻辑右移把目标字节移到最低位，再取低8位
+     注意 `&` 的优先级低于 `>>`，必须加括号 */
 }
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
@@ -269,14 +255,15 @@ int grayToBinary(int x) {
  */
 int bitCount(int x) {
   //掩码过大需要手动拼凑
-  int m1=0x55 | (0x55 << 8);
-  m1=m1 | (m1 << 16);//0x55555555
-  int m2=0x33 | (0x33 << 8);
-  m2=m2 | (m2 << 16);//0x33333333
-  int m3=0x0F | (0x0F << 8);
-  m3=m3 | (m3 << 16);//0x0F0F0F0F
-  int m4=0xFF | (0xFF << 16);//0x00FF00FF
-  int m5=0xFF | (0xFF << 8);//0x0000FFFF
+  int m1, m2, m3, m4, m5;
+  m1 = 0x55 | (0x55 << 8);
+  m1 = m1 | (m1 << 16);//0x55555555
+  m2 = 0x33 | (0x33 << 8);
+  m2 = m2 | (m2 << 16);//0x33333333
+  m3 = 0x0F | (0x0F << 8);
+  m3 = m3 | (m3 << 16);//0x0F0F0F0F
+  m4 = 0xFF | (0xFF << 16);//0x00FF00FF
+  m5 = 0xFF | (0xFF << 8);//0x0000FFFF
   x = (x & m1) + ((x >> 1)  & m1);
   x = (x & m2) + ((x >> 2)  & m2);
   x = (x & m3) + ((x >> 4)  & m3);
@@ -331,7 +318,9 @@ int sign(int x) {
  *   Rating: 3
  */
 int addOK(int x, int y) {
-  return !((x^y)>>31 & (x^(x+y))>>31);
+  int s = x + y;
+  /* 溢出 <=> x,y 同号(~((x^y)>>31) 为全1) 且 s 与 x 异号((x^s)>>31 为全1) */
+  return !(~((x ^ y) >> 31) & ((x ^ s) >> 31));
 }
 /* 
  * absVal - absolute value of x
@@ -342,7 +331,8 @@ int addOK(int x, int y) {
  *   Rating: 4
  */
 int absVal(int x) {
-  return (~x + 1) ^ (x >> 31) + (x >> 31 & 1);
+  /* 正数: x^0 + 0 = x; 负数: x^-1 + 1 = -x */
+  return (x ^ (x >> 31)) + ((x >> 31) & 1);
 }
 /*
  * satSub - compute x - y, saturating to Tmax on positive overflow and
@@ -361,7 +351,9 @@ int satSub(int x, int y) {
   int overflow = (x_sign ^ y_sign) & (x_sign ^ sub_sign);
   int tmax = ~(1 << 31);
   int tmin = 1 << 31;
-  return (overflow & ~sub_sign & tmax) | (overflow & sub_sign & tmin) | (~overflow & sub);
+  /* 溢出方向由 x 的符号决定：x<0 且 y>0 -> 负溢出取 Tmin；否则取 Tmax */
+  int sat = (x_sign & tmin) | (~x_sign & tmax);
+  return (overflow & sat) | (~overflow & sub);
 }
 //对符号位做判断即可，利用逻辑右移和或代替if结构
 // Floating point (rating sum 16)
@@ -467,12 +459,12 @@ int float_f2i(unsigned uf) {
  */
 unsigned float_negpwr2(int x) {
   if (x < -127) {
-    // x 过小，2.0^-x 过大超出表示范围，返回 +INF
+    // x 过小 => 2.0^-x 过大超出表示范围，返回 +INF
     return 0x7F800000; // +INF
   } 
   else if (x > 149) {
-    // 超出表示范围，返回 +INF
-    return 0x7F800000; // +INF
+    // x 过大 => 2.0^-x 小于最小非规格化数，下溢为 0
+    return 0; 
   } 
   else if (x >= 127) {
     // 非规格化数
@@ -502,43 +494,30 @@ unsigned float_greater(unsigned x, unsigned y) {
   unsigned exp_y = (y >> 23) & 0xFF;
   unsigned frac_x = x & 0x7FFFFF;
   unsigned frac_y = y & 0x7FFFFF;
+  unsigned mag_x = x & 0x7FFFFFFF;
+  unsigned mag_y = y & 0x7FFFFFFF;
 
-  //NaN
+  //NaN 参与比较，结果恒为假
   if (exp_x == 0xFF && frac_x != 0) {
-    return x; 
+    return 0;
   }
-  if(exp_y == 0xFF && frac_y != 0) {
-    return y; 
-  }
-
-  //先比较符号位，再比较指数位和尾数位
-  if (sign_x > sign_y) {
-    return 0; // x < y
-  }
-  else if (sign_x < sign_y) {
-    return 0x3F800000; // x > y
-  }
-  else{
-    if (exp_x > exp_y) {
-      return sign_x ? 0 : 0x3F800000; 
-    }
-    else if (exp_x < exp_y) {
-      return sign_x ? 0x3F800000 : 0; 
-    }
-    else {
-      if (frac_x > frac_y) {
-        return sign_x ? 0 : 0x3F800000; 
-      }
-      else if (frac_x < frac_y) {
-        return sign_x ? 0x3F800000 : 0;
-      }
-      else {
-        return 0; // x == y
-      }
-    }
-
+  if (exp_y == 0xFF && frac_y != 0) {
+    return 0;
   }
 
+  // +0 与 -0 数值相等
+  if (mag_x == 0 && mag_y == 0) {
+    return 0;
+  }
 
-  
+  // 符号不同：负数更小
+  if (sign_x != sign_y) {
+    return sign_x ? 0 : 1;
+  }
+  // 同为正数：按无符号位模式比较即可
+  if (sign_x == 0) {
+    return mag_x > mag_y;
+  }
+  // 同为负数：绝对值大的反而小
+  return mag_x < mag_y;
 }
