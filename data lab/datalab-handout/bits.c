@@ -268,11 +268,20 @@ int grayToBinary(int x) {
  *   Rating: 4
  */
 int bitCount(int x) {
-  x = (x & 0x55555555) + ((x >> 1)  & 0x55555555);
-  x = (x & 0x33333333) + ((x >> 2)  & 0x33333333);
-  x = (x & 0x0F0F0F0F) + ((x >> 4)  & 0x0F0F0F0F);
-  x = (x & 0x00FF00FF) + ((x >> 8)  & 0x00FF00FF);
-  x = (x & 0x0000FFFF) + ((x >> 16) & 0x0000FFFF);
+  //掩码过大需要手动拼凑
+  int m1=0x55 | (0x55 << 8);
+  m1=m1 | (m1 << 16);//0x55555555
+  int m2=0x33 | (0x33 << 8);
+  m2=m2 | (m2 << 16);//0x33333333
+  int m3=0x0F | (0x0F << 8);
+  m3=m3 | (m3 << 16);//0x0F0F0F0F
+  int m4=0xFF | (0xFF << 16);//0x00FF00FF
+  int m5=0xFF | (0xFF << 8);//0x0000FFFF
+  x = (x & m1) + ((x >> 1)  & m1);
+  x = (x & m2) + ((x >> 2)  & m2);
+  x = (x & m3) + ((x >> 4)  & m3);
+  x = (x & m4) + ((x >> 8)  & m4);
+  x = (x & m5) + ((x >> 16) & m5);
   return x;
   /*  
     思路是将32位整数分为若干组，组内并行计算再合并
@@ -322,7 +331,7 @@ int sign(int x) {
  *   Rating: 3
  */
 int addOK(int x, int y) {
-  return !!((x^y)>>31|(x^(x+y))>>31);
+  return !((x^y)>>31 & (x^(x+y))>>31);
 }
 /* 
  * absVal - absolute value of x
@@ -345,8 +354,16 @@ int absVal(int x) {
  *   Rating: 4
  */
 int satSub(int x, int y) {
-  return 2;
+  int sub = x + (~y + 1);
+  int x_sign = x >> 31;
+  int y_sign = y >> 31;
+  int sub_sign = sub >> 31;
+  int overflow = (x_sign ^ y_sign) & (x_sign ^ sub_sign);
+  int tmax = ~(1 << 31);
+  int tmin = 1 << 31;
+  return (overflow & ~sub_sign & tmax) | (overflow & sub_sign & tmin) | (~overflow & sub);
 }
+//对符号位做判断即可，利用逻辑右移和或代替if结构
 // Floating point (rating sum 16)
 /* 
  * float_twice - Return bit-level equivalent of expression 2*f for
@@ -360,7 +377,34 @@ int satSub(int x, int y) {
  *   Rating: 4
  */
 unsigned float_twice(unsigned uf) {
-  return 2;
+  unsigned sign = uf & 0x80000000;
+  unsigned exp = (uf >> 23) & 0xFF;
+  unsigned frac = uf & 0x7FFFFF;
+
+  if (exp == 0xFF) {
+    // NaN 或 infinity
+    return uf;
+  } 
+  else if (exp == 0) {
+    // 非规格化数
+    frac <<= 1;
+    if (frac & 0x800000) {
+      // Normalize the number
+      exp = 1;
+      frac &= 0x7FFFFF; // Clear the leading bit
+    }
+  } 
+  else {
+    // 规格化数
+    exp += 1;
+    if (exp == 0xFF) {
+      //溢出处理为inf
+      frac = 0;
+    }
+  }
+
+  return sign | (exp << 23) | frac;
+
 }
 /* 
  * float_f2i - Return bit-level equivalent of expression (int) f
@@ -375,7 +419,38 @@ unsigned float_twice(unsigned uf) {
  *   Rating: 4
  */
 int float_f2i(unsigned uf) {
-  return 2;
+  unsigned sign = uf >> 31;
+  unsigned exp = (uf >> 23) & 0xFF;
+  unsigned frac = uf & 0x7FFFFF;
+
+  if (exp == 0xFF) {
+    // NaN 或 infinity
+    return 0x80000000u;
+  } 
+  else if (exp < 127) {
+    // 小于1的数
+    return 0;
+  } 
+  else {
+    int E = exp - 127;
+    if (E > 31) {
+      // 超出int范围
+      return 0x80000000u;
+    }
+    frac |= 0x800000; // 添加隐含的1
+    if (E > 23) {
+      frac <<= (E - 23);
+    } 
+    else {
+      frac >>= (23 - E);
+    }
+    if (sign) {
+      return -frac;
+    } 
+    else {
+      return frac;
+    }
+  }
 }
 /* 
  * float_negpwr2 - Return bit-level equivalent of the expression 2.0^-x
@@ -391,7 +466,23 @@ int float_f2i(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_negpwr2(int x) {
-    return 2;
+  if (x < -127) {
+    // x 过小，2.0^-x 过大超出表示范围，返回 +INF
+    return 0x7F800000; // +INF
+  } 
+  else if (x > 149) {
+    // 超出表示范围，返回 +INF
+    return 0x7F800000; // +INF
+  } 
+  else if (x >= 127) {
+    // 非规格化数
+    return 1 << (149 - x);
+  } 
+  else {
+    // 规格化数（含 x 为负的情况，此时指数为 127 - x > 127）
+    unsigned exp = 127 - x;
+    return exp << 23; // 设置指数位，尾数为0
+  }
 }
 /* 
  * float_greater - Return bit-level equivalent of expression x > y for
@@ -405,5 +496,49 @@ unsigned float_negpwr2(int x) {
  *   Rating: 4
  */
 unsigned float_greater(unsigned x, unsigned y) {
-  return 2;
+  unsigned sign_x = x >> 31;
+  unsigned sign_y = y >> 31;
+  unsigned exp_x = (x >> 23) & 0xFF;
+  unsigned exp_y = (y >> 23) & 0xFF;
+  unsigned frac_x = x & 0x7FFFFF;
+  unsigned frac_y = y & 0x7FFFFF;
+
+  //NaN
+  if (exp_x == 0xFF && frac_x != 0) {
+    return x; 
+  }
+  if(exp_y == 0xFF && frac_y != 0) {
+    return y; 
+  }
+
+  //先比较符号位，再比较指数位和尾数位
+  if (sign_x > sign_y) {
+    return 0; // x < y
+  }
+  else if (sign_x < sign_y) {
+    return 0x3F800000; // x > y
+  }
+  else{
+    if (exp_x > exp_y) {
+      return sign_x ? 0 : 0x3F800000; 
+    }
+    else if (exp_x < exp_y) {
+      return sign_x ? 0x3F800000 : 0; 
+    }
+    else {
+      if (frac_x > frac_y) {
+        return sign_x ? 0 : 0x3F800000; 
+      }
+      else if (frac_x < frac_y) {
+        return sign_x ? 0x3F800000 : 0;
+      }
+      else {
+        return 0; // x == y
+      }
+    }
+
+  }
+
+
+  
 }
