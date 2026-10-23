@@ -1,0 +1,20 @@
+# Hazard regression (mirror of the above for predict-not-taken pipelines):
+# a taken branch whose sequential fall-through is a CALL. The fall-through CALL
+# must not hijack the taken-branch redirect.
+    xorq   %rax, %rax       # ZF = 1
+    je     L                # TAKEN
+    call   F                # fall-through wrong-path CALL
+    halt
+L:
+    irmovq $0xaaa, %rbx
+    irmovq result, %rdx
+    rmmovq %rbx, 0(%rdx)
+    halt
+F:
+    irmovq $0xbbb, %rbx
+    irmovq result, %rdx
+    rmmovq %rbx, 0(%rdx)
+    halt
+    .pos 0x300
+result:
+    .quad 0

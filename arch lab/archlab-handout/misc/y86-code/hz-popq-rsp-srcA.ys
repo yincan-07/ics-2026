@@ -1,0 +1,19 @@
+# Hazard regression: popq %rsp forwarded as source A.
+# popq %rsp must leave %rsp = the value read from memory (not %rsp+8). The next
+# instruction reads %rsp before writeback, so forwarding must deliver that same
+# memory value. In the folded-Execute pipelines dstE==dstM==%rsp here, and the
+# register file commits the memory value (dstM written last); forwarding must
+# match by preferring e_valM over e_valE.
+    irmovq stack, %rsp
+    irmovq $0x3f3f, %rax
+    pushq  %rax             # mem[stack-8] = 0x3f3f, rsp = stack-8
+    popq   %rsp             # rsp <- 0x3f3f  (memory value, not stack)
+    rrmovq %rsp, %rbx       # srcA forward: rbx must be 0x3f3f
+    irmovq result, %rdx
+    rmmovq %rbx, 0(%rdx)
+    halt
+    .pos 0x300
+result:
+    .quad 0
+    .pos 0x200
+stack:

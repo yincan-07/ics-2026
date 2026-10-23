@@ -1,0 +1,17 @@
+# Arch Lab handout
+
+```
+README            this file
+bin/              prebuilt tools: yas, yis, ysim, ydb, y86-lsp, grader
+architectures/    the .hcl architectures you edit (Part B and Part C)
+misc/             Y86 assembly you write (Part A, Part C), examples.c, ncopy.c, y86-code/
+docs/             hcl-lang.md (HCL language reference), editor-setup.md
+Makefile          run `make handin` to build archlab-handin.tar
+```
+
+You need no Rust toolchain: the tools are prebuilt and read `.hcl` files
+directly. Run a program on an architecture with
+`./bin/ysim <prog>.ys --arch <name>`, check an architecture with
+`./bin/ysim --check architectures/<name>.hcl`, and grade locally with
+`./bin/grader part-a|part-b|part-c`. See `docs/hcl-lang.md` for the language
+and `docs/editor-setup.md` for editor integration.

@@ -1,0 +1,14 @@
+# Hazard regression: popq %rsp forwarded as source B (memory base register).
+# Same corner as srcA, but the popped %rsp is consumed as the base of a store,
+# exercising the d_valB forwarding path.
+    irmovq stack, %rsp
+    irmovq dest, %rax       # rax = address 0x100
+    pushq  %rax             # mem[stack-8] = 0x100, rsp = stack-8
+    popq   %rsp             # rsp <- 0x100  (memory value)
+    rmmovq %rax, 0(%rsp)    # srcB forward: base must be 0x100 -> mem[0x100]=0x100
+    halt                     # buggy base = rsp+8 = stack -> wrong address
+    .pos 0x100
+dest:
+    .quad 0
+    .pos 0x200
+stack:

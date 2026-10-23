@@ -1,0 +1,23 @@
+# Hazard regression: a CALL sitting at the predicted-taken target of a
+# mispredicted branch must NOT hijack the misprediction-recovery PC.
+# jne is not taken; predict-taken brings the CALL into Decode while the JX is
+# in Execute. f_pc must let the Execute-stage redirect win over the Decode CALL.
+    irmovq $1, %rax
+    irmovq $1, %rcx
+    subq   %rax, %rcx       # rcx = 0 -> ZF = 1 (equal)
+    jne    L                # NOT taken; predict-taken => misprediction
+    irmovq $0xaaa, %rbx     # correct fall-through path
+    irmovq result, %rdx
+    rmmovq %rbx, 0(%rdx)
+    halt
+L:                           # predicted-taken target: a wrong-path CALL
+    call   F
+    halt
+F:
+    irmovq $0xbbb, %rbx
+    irmovq result, %rdx
+    rmmovq %rbx, 0(%rdx)
+    halt
+    .pos 0x300
+result:
+    .quad 0
