@@ -1,4 +1,4 @@
-	.pos 0
+.pos 0
 	irmovq	stack,%rsp
 	call main
 	halt
@@ -15,10 +15,59 @@ array:
 ################################################################################
 # You may want to modify this portion
 
+
+# 寄存器用途:
+#   %rsi  剩余需要比较的趟数 / 每趟比较次数 (n-1)
+#   %r8   本趟是否发生交换 (swapped)
+#   %r9   当前扫描指针
+#   %r10  n-1 计算辅助
+#   %r11  本趟剩余比较次数
+#   %rax  前一个元素 a
+#   %rbx  后一个元素 b
+#   %rcx  a-b 的结果 / 步长等临时值
+
 bubble_a:
+	irmovq	$1, %r10
+	subq	%r10, %rsi		# %rsi = n - 1
+	jle	Done			# n <= 1 无需排序
+
+Outer:
+	xorq	%r8, %r8		# swapped = 0
+	rrmovq	%rdi, %r9		# ptr = array
+	rrmovq	%rsi, %r11		# 本趟比较 n-1 次
+
+Inner:
+	andq	%r11, %r11
+	jle	EndInner		# 本趟比较完毕
+	mrmovq	(%r9), %rax		# a = *ptr
+	mrmovq	8(%r9), %rbx		# b = *(ptr+1)
+	rrmovq	%rax, %rcx
+	subq	%rbx, %rcx		# rcx = a - b
+	jle	NoSwap			# a <= b，不交换
+	rmmovq	%rbx, (%r9)		# *ptr = b
+	rmmovq	%rax, 8(%r9)		# *(ptr+1) = a
+	irmovq	$1, %r8			# swapped = 1
+
+NoSwap:
+	irmovq	$8, %rcx
+	addq	%rcx, %r9		# ptr++
+	irmovq	$1, %rcx
+	subq	%rcx, %r11		# 剩余比较次数--
+	jmp	Inner
+
+EndInner:
+	andq	%r8, %r8
+	je	Done			# 本趟无交换，已有序
+	irmovq	$1, %rcx
+	subq	%rcx, %rsi		# 下一趟少比较一次
+	jg	Outer			# 还需要继续
+Done:
 	ret
 
 main:
+	irmovq	array, %rdi
+	irmovq	$6, %rsi
+	call	bubble_a
 	ret
 
 	.pos 0x200

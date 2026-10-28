@@ -1,2 +1,46 @@
 # As you've got familiar with Y86 after writting your first y86 code
 # (bubble.ys), this code is left blank for you :)
+	.pos 0
+	irmovq	stack,%rsp
+	call main
+	halt
+
+	#设置初始链表
+    .align 8
+ele1:
+    .quad 0x00a
+    .quad ele2
+ele2:
+    .quad 0x0b0
+    .quad ele3
+ele3:
+    .quad 0xc00
+    .quad 0
+	
+################################################################################
+# You may want to modify this portion
+
+bubble_a:
+	irmovq $0, %rax
+    jmp test
+
+test:
+    andq %rdi, %rdi
+    jne loop
+    ret
+
+loop:
+    mrmovq 0(%rdi), %rcx
+    mrmovq 8(%rdi), %rdi
+    addq %rcx, %rax
+    jmp test
+
+#main function
+main:
+	irmovq	ele1, %rdi
+    call bubble_a
+    ret
+
+
+	.pos 0x200
+stack:
