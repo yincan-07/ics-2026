@@ -51,14 +51,14 @@ u8 ifun = [
 
 bool instr_valid = icode in // CMOVX is the same as RRMOVQ
     { NOP, HALT, CMOVX, IRMOVQ, RMMOVQ, MRMOVQ,
-    OPQ, JX, CALL, RET, PUSHQ, POPQ };
+    OPQ, JX, CALL, RET, PUSHQ, POPQ ,IOPQ};
 
 // Does fetched instruction require a regid byte?
 bool need_regids =
-    icode in { CMOVX, OPQ, PUSHQ, POPQ, IRMOVQ, RMMOVQ, MRMOVQ };
+    icode in { CMOVX, OPQ, PUSHQ, POPQ, IRMOVQ, RMMOVQ, MRMOVQ,IOPQ };
 
 // Does fetched instruction require a constant word?
-bool need_valC = icode in { IRMOVQ, RMMOVQ, MRMOVQ, JX, CALL };
+bool need_valC = icode in { IRMOVQ, RMMOVQ, MRMOVQ, JX, CALL ,IOPQ};
 
 @set_input(pc_inc, {
     need_valC: need_valC,
@@ -79,14 +79,14 @@ u64 valP = pc_inc.new_pc;
 
 // What register should be used as the A source?
 u8 srcA = [
-    icode in { CMOVX, RMMOVQ, OPQ, PUSHQ  } : ialign.rA;
+    icode in { CMOVX, RMMOVQ, OPQ, PUSHQ } : ialign.rA;
     icode in { POPQ, RET } : RSP;
     true : RNONE; // Don't need register
 ];
 
 // What register should be used as the B source?
 u8 srcB = [
-    icode in { OPQ, RMMOVQ, MRMOVQ } : ialign.rB;
+    icode in { OPQ, RMMOVQ, MRMOVQ ,IOPQ } : ialign.rB;
     icode in { PUSHQ, POPQ, CALL, RET } : RSP;
     true : RNONE; // Don't need register
 ];
@@ -99,7 +99,7 @@ u8 srcB = [
 // What register should be used as the E destination?
 u8 dstE = [
     icode in { CMOVX } && cnd : ialign.rB;
-    icode in { IRMOVQ, OPQ} : ialign.rB;
+    icode in { IRMOVQ, OPQ ,IOPQ} : ialign.rB;
     icode in { PUSHQ, POPQ, CALL, RET } : RSP;
     true : RNONE; // Don't write any register
 ];
@@ -115,7 +115,7 @@ u8 dstM = [
 // Select input A to ALU
 u64 aluA = [
     icode in { CMOVX, OPQ } : reg_read.valA;
-    icode in { IRMOVQ, RMMOVQ, MRMOVQ } : ialign.valC;
+    icode in { IRMOVQ, RMMOVQ, MRMOVQ ,IOPQ} : ialign.valC;
     icode in { CALL, PUSHQ } : NEG_8;
     icode in { RET, POPQ } : 8;
     // Other instructions don't need ALU
@@ -124,14 +124,14 @@ u64 aluA = [
 // Select input B to ALU
 u64 aluB = [
     icode in { RMMOVQ, MRMOVQ, OPQ, CALL,
-              PUSHQ, RET, POPQ } : reg_read.valB;
+              PUSHQ, RET, POPQ,IOPQ } : reg_read.valB;
     icode in { CMOVX, IRMOVQ } : 0;
     // Other instructions don't need ALU
 ];
 
 // Set the ALU function
 u8 alufun = [
-    icode == OPQ : ifun;
+    icode == OPQ||icode == IOPQ : ifun;
     true : ADD;
 ];
 
@@ -142,7 +142,7 @@ u8 alufun = [
 });
 
 // Should the condition codes be updated?
-bool set_cc = icode in { OPQ };
+bool set_cc = icode in { OPQ,IOPQ  };
 
 u64 valE = alu.e;
 

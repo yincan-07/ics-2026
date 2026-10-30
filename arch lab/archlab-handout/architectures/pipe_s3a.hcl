@@ -22,10 +22,10 @@ u64 f_pc = [
     // valC is from Fetch Stage, thus the last cycle
     D.icode == CALL : D.valC;
     // Taken branch.  Use instruction constant
-    U8_PLACEHOLDER == JX && e_cnd : U64_PLACEHOLDER;
+    E.icode == JX && e_cnd : E.valC;
     // Completion of RET instruction.  Use value from stack
     // valM is from DEMW stage, thus the current cycle
-    U8_PLACEHOLDER == RET : e_valM;
+    E.icode == RET : e_valM;
     // Default: Use incremented PC
     1 : F.valP;
 ];
@@ -212,7 +212,7 @@ ConditionCode cc = reg_cc.cc;
 bool e_cnd = cond.cnd;
 
 u8 e_dstE = [
-    U8_PLACEHOLDER == CMOVX && !BOOL_PLACEHOLDER : RNONE;
+    E.icode == CMOVX && !e_cnd : RNONE;
     1 : E.dstE;
 ];
 u8 e_dstM = E.dstM;
@@ -271,15 +271,15 @@ bool prog_term = e_stat in { Hlt, Adr, Ins };
 // If a data hazard occurs, we need to wait for the data to be written to the
 // registers before proceeding.
 bool data_harzard = d_srcA != RNONE && d_srcA in { e_dstE, e_dstM }
-    || U8_PLACEHOLDER != RNONE && BOOL_PLACEHOLDER;
+    || d_srcB != RNONE && d_srcB in { e_dstE, e_dstM };
 
-bool f_stall = D.icode in { JX, RET } || BOOL_PLACEHOLDER;
+bool f_stall = D.icode in { JX, RET } || data_harzard;
 
 @set_stage(f, {
     stall: f_stall,
 });
 
-bool d_stall = BOOL_PLACEHOLDER;
+bool d_stall = data_harzard ;
 
 bool d_bubble = D.icode in { JX, RET } && !d_stall;
 
