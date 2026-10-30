@@ -8,13 +8,13 @@
 	#设置初始链表
     .align 8
 ele1:
-    .quad 0x00a
+    .quad 0x00d
     .quad ele2
 ele2:
-    .quad 0x0b0
+    .quad 0x0e0
     .quad ele3
 ele3:
-    .quad 0xc00
+    .quad 0xf00
     .quad 0
 	
 ################################################################################
