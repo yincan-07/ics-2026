@@ -26,7 +26,7 @@ stage m { stat: Stat = Aok, icode: u8 = NOP, cnd: bool = false, valP: u64 = 0, v
 // next PC.
 u64 f_pc = [
     // Branch misprediction.  Use incremental PC
-    E.icode == JX && !e_cnd : E.valP;
+    M.icode == JX && !M.cnd : M.valP;
     // Completion of RET instruction.  Use value from stack
     // valM is from DEMW stage, thus the current cycle
     M.icode == RET : m_valM;
@@ -332,7 +332,7 @@ bool load_use_harzard = E.icode in { MRMOVQ, POPQ } && E.dstM in { d_srcA, d_src
 // Unlike in `pipe_s4a`, here we do not need to consider the case of branch 
 // misprediction (since in the next cycle, Fetch will always get the `f_pc`
 // from `M.valP`).
-bool f_stall = ret_harzard && !branch_mispred || load_use_harzard;
+bool f_stall = ret_harzard || load_use_harzard;
 
 @set_stage(f, {
     stall: f_stall,
@@ -343,7 +343,7 @@ bool d_stall = load_use_harzard;
 // Unlike in `pipe_s4a`, when a branch misprediction occurs, we directly insert
 // a bubble, because the instruction in the Fetch stage at that point is invalid.
 // Actually, ret_harzard and d_stall cannot be true at the same time.
-bool d_bubble = false || ret_harzard && !branch_mispred && !d_stall;
+bool d_bubble = branch_mispred || ret_harzard && !d_stall;
 
 @set_stage(d, {
     stall: d_stall,
