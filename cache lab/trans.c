@@ -1,5 +1,7 @@
 /*
  * trans.c - Matrix transpose B = A^T
+ * name: 尹璨
+ * ID: 2500012789
  *
  * Each transpose function must have a prototype of the form:
  * void trans(int M, int N, int A[N][M], int B[M][N]);
@@ -13,19 +15,112 @@
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 
-/*
- * transpose_submit - This is the solution transpose function that you
- *     will be graded on for Part B of the assignment. Do not change
- *     the description string "Transpose submission", as the driver
- *     searches for that string to identify the transpose function to
- *     be graded. The REQUIRES and ENSURES from 15-122 are included
- *     for your convenience. They can be removed if you like.
- */
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
+    int row, col, i, j;
+    int a0, a1, a2, a3, a4, a5, a6, a7;
+
     REQUIRES(M > 0);
     REQUIRES(N > 0);
+
+    if (M == 32 && N == 32) {
+        for (row = 0; row < N; row += 8) {
+            for (col = 0; col < M; col += 8) {
+                for (i = row; i < row + 8; ++i) {
+                    a0 = A[i][col];
+                    a1 = A[i][col + 1];
+                    a2 = A[i][col + 2];
+                    a3 = A[i][col + 3];
+                    a4 = A[i][col + 4];
+                    a5 = A[i][col + 5];
+                    a6 = A[i][col + 6];
+                    a7 = A[i][col + 7];
+                    B[col][i] = a0;
+                    B[col + 1][i] = a1;
+                    B[col + 2][i] = a2;
+                    B[col + 3][i] = a3;
+                    B[col + 4][i] = a4;
+                    B[col + 5][i] = a5;
+                    B[col + 6][i] = a6;
+                    B[col + 7][i] = a7;
+                }
+            }
+        }
+    } else if (M == 64 && N == 64) {
+        for (row = 0; row < N; row += 8) {
+            for (col = 0; col < M; col += 8) {
+                for (i = row; i < row + 4; ++i) {
+                    a0 = A[i][col];
+                    a1 = A[i][col + 1];
+                    a2 = A[i][col + 2];
+                    a3 = A[i][col + 3];
+                    a4 = A[i][col + 4];
+                    a5 = A[i][col + 5];
+                    a6 = A[i][col + 6];
+                    a7 = A[i][col + 7];
+                    B[col][i] = a0;
+                    B[col + 1][i] = a1;
+                    B[col + 2][i] = a2;
+                    B[col + 3][i] = a3;
+                    B[col][i + 4] = a4;
+                    B[col + 1][i + 4] = a5;
+                    B[col + 2][i + 4] = a6;
+                    B[col + 3][i + 4] = a7;
+                }
+                for (j = col; j < col + 4; ++j) {
+                    a0 = A[row + 4][j];
+                    a1 = A[row + 5][j];
+                    a2 = A[row + 6][j];
+                    a3 = A[row + 7][j];
+                    a4 = B[j][row + 4];
+                    a5 = B[j][row + 5];
+                    a6 = B[j][row + 6];
+                    a7 = B[j][row + 7];
+                    B[j][row + 4] = a0;
+                    B[j][row + 5] = a1;
+                    B[j][row + 6] = a2;
+                    B[j][row + 7] = a3;
+                    B[j + 4][row] = a4;
+                    B[j + 4][row + 1] = a5;
+                    B[j + 4][row + 2] = a6;
+                    B[j + 4][row + 3] = a7;
+                }
+                for (i = row + 4; i < row + 8; ++i) {
+                    a0 = A[i][col + 4];
+                    a1 = A[i][col + 5];
+                    a2 = A[i][col + 6];
+                    a3 = A[i][col + 7];
+                    B[col + 4][i] = a0;
+                    B[col + 5][i] = a1;
+                    B[col + 6][i] = a2;
+                    B[col + 7][i] = a3;
+                }
+            }
+        }
+    } else {
+        for (row = 0; row < N; row += 24) {
+            for (col = 0; col < M; col += 4) {
+                for (i = row; i < row + 24 && i < N; ++i) {
+                    if (col + 3 < M) {
+                        a0 = A[i][col];
+                        a1 = A[i][col + 1];
+                        a2 = A[i][col + 2];
+                        a3 = A[i][col + 3];
+                        B[col][i] = a0;
+                        B[col + 1][i] = a1;
+                        B[col + 2][i] = a2;
+                        B[col + 3][i] = a3;
+                    } else {
+                        for (j = col; j < M; ++j) {
+                            a0 = A[i][j];
+                            B[j][i] = a0;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     ENSURES(is_transpose(M, N, A, B));
 }
