@@ -28,93 +28,109 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
         for (row = 0; row < N; row += 8) {
             for (col = 0; col < M; col += 8) {
                 for (i = row; i < row + 8; ++i) {
-                    a0 = A[i][col];
-                    a1 = A[i][col + 1];
-                    a2 = A[i][col + 2];
-                    a3 = A[i][col + 3];
-                    a4 = A[i][col + 4];
-                    a5 = A[i][col + 5];
-                    a6 = A[i][col + 6];
-                    a7 = A[i][col + 7];
-                    B[col][i] = a0;
-                    B[col + 1][i] = a1;
-                    B[col + 2][i] = a2;
-                    B[col + 3][i] = a3;
-                    B[col + 4][i] = a4;
-                    B[col + 5][i] = a5;
-                    B[col + 6][i] = a6;
-                    B[col + 7][i] = a7;
+                    a0 = 0;
+                    for (j = col; j < col + 8; ++j) {
+                        a1 = A[i][j];
+                        if (i == j) {
+                            a0 = a1;
+                        } else {
+                            B[j][i] = a1;
+                        }
+                    }
+                    if (row == col) {
+                        B[i][i] = a0;
+                    }
                 }
             }
         }
     } else if (M == 64 && N == 64) {
-        for (row = 0; row < N; row += 8) {
-            for (col = 0; col < M; col += 8) {
-                for (i = row; i < row + 4; ++i) {
-                    a0 = A[i][col];
-                    a1 = A[i][col + 1];
-                    a2 = A[i][col + 2];
-                    a3 = A[i][col + 3];
-                    a4 = A[i][col + 4];
-                    a5 = A[i][col + 5];
-                    a6 = A[i][col + 6];
-                    a7 = A[i][col + 7];
-                    B[col][i] = a0;
-                    B[col + 1][i] = a1;
-                    B[col + 2][i] = a2;
-                    B[col + 3][i] = a3;
-                    B[col][i + 4] = a4;
-                    B[col + 1][i + 4] = a5;
-                    B[col + 2][i + 4] = a6;
-                    B[col + 3][i + 4] = a7;
+        for (col = 0; col < M; col += 8) {
+            for (row = 0; row < N; row += 8) {
+                for (i = 0; i < 4; ++i) {
+                    a0 = A[row + i][col];
+                    a1 = A[row + i][col + 1];
+                    a2 = A[row + i][col + 2];
+                    a3 = A[row + i][col + 3];
+                    a4 = A[row + i][col + 4];
+                    a5 = A[row + i][col + 5];
+                    a6 = A[row + i][col + 6];
+                    a7 = A[row + i][col + 7];
+                    B[col + i][row] = a0;
+                    B[col + i][row + 1] = a1;
+                    B[col + i][row + 2] = a2;
+                    B[col + i][row + 3] = a3;
+                    B[col + i][row + 4] = a4;
+                    B[col + i][row + 5] = a5;
+                    B[col + i][row + 6] = a6;
+                    B[col + i][row + 7] = a7;
                 }
-                for (j = col; j < col + 4; ++j) {
-                    a0 = A[row + 4][j];
-                    a1 = A[row + 5][j];
-                    a2 = A[row + 6][j];
-                    a3 = A[row + 7][j];
-                    a4 = B[j][row + 4];
-                    a5 = B[j][row + 5];
-                    a6 = B[j][row + 6];
-                    a7 = B[j][row + 7];
-                    B[j][row + 4] = a0;
-                    B[j][row + 5] = a1;
-                    B[j][row + 6] = a2;
-                    B[j][row + 7] = a3;
-                    B[j + 4][row] = a4;
-                    B[j + 4][row + 1] = a5;
-                    B[j + 4][row + 2] = a6;
-                    B[j + 4][row + 3] = a7;
+                for (i = 0; i < 4; ++i) {
+                    for (j = i + 1; j < 4; ++j) {
+                        a0 = B[col + i][row + j];
+                        a1 = B[col + i][row + j + 4];
+                        B[col + i][row + j] = B[col + j][row + i];
+                        B[col + i][row + j + 4] =
+                            B[col + j][row + i + 4];
+                        B[col + j][row + i] = a0;
+                        B[col + j][row + i + 4] = a1;
+                    }
                 }
-                for (i = row + 4; i < row + 8; ++i) {
-                    a0 = A[i][col + 4];
-                    a1 = A[i][col + 5];
-                    a2 = A[i][col + 6];
-                    a3 = A[i][col + 7];
-                    B[col + 4][i] = a0;
-                    B[col + 5][i] = a1;
-                    B[col + 6][i] = a2;
-                    B[col + 7][i] = a3;
+                for (j = 0; j < 4; ++j) {
+                    a0 = A[row + 4][col + j];
+                    a1 = A[row + 5][col + j];
+                    a2 = A[row + 6][col + j];
+                    a3 = A[row + 7][col + j];
+                    a4 = B[col + j][row + 4];
+                    a5 = B[col + j][row + 5];
+                    a6 = B[col + j][row + 6];
+                    a7 = B[col + j][row + 7];
+                    B[col + j][row + 4] = a0;
+                    B[col + j][row + 5] = a1;
+                    B[col + j][row + 6] = a2;
+                    B[col + j][row + 7] = a3;
+                    B[col + j + 4][row] = a4;
+                    B[col + j + 4][row + 1] = a5;
+                    B[col + j + 4][row + 2] = a6;
+                    B[col + j + 4][row + 3] = a7;
+                }
+                for (i = 4; i < 8; ++i) {
+                    a0 = A[row + i][col + 4];
+                    a1 = A[row + i][col + 5];
+                    a2 = A[row + i][col + 6];
+                    a3 = A[row + i][col + 7];
+                    B[col + i][row + 4] = a0;
+                    B[col + i][row + 5] = a1;
+                    B[col + i][row + 6] = a2;
+                    B[col + i][row + 7] = a3;
+                }
+                for (i = 4; i < 8; ++i) {
+                    for (j = i + 1; j < 8; ++j) {
+                        a0 = B[col + i][row + j];
+                        B[col + i][row + j] = B[col + j][row + i];
+                        B[col + j][row + i] = a0;
+                    }
                 }
             }
         }
     } else {
-        for (row = 0; row < N; row += 24) {
-            for (col = 0; col < M; col += 4) {
-                for (i = row; i < row + 24 && i < N; ++i) {
-                    if (col + 3 < M) {
-                        a0 = A[i][col];
-                        a1 = A[i][col + 1];
-                        a2 = A[i][col + 2];
-                        a3 = A[i][col + 3];
-                        B[col][i] = a0;
-                        B[col + 1][i] = a1;
-                        B[col + 2][i] = a2;
-                        B[col + 3][i] = a3;
-                    } else {
-                        for (j = col; j < M; ++j) {
+        for (col = 0; col < M; col += 12) {
+            for (row = 0; row < N; row += 12) {
+                for (i = row; i < row + 12 && i < N; ++i) {
+                    for (j = col; j < col + 12 && j < M;) {
+                        if (j + 3 < M) {
+                            a0 = A[i][j];
+                            a1 = A[i][j + 1];
+                            a2 = A[i][j + 2];
+                            a3 = A[i][j + 3];
+                            B[j][i] = a0;
+                            B[j + 1][i] = a1;
+                            B[j + 2][i] = a2;
+                            B[j + 3][i] = a3;
+                            j += 4;
+                        } else {
                             a0 = A[i][j];
                             B[j][i] = a0;
+                            ++j;
                         }
                     }
                 }
