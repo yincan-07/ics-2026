@@ -1,9 +1,8 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * Name: 尹璨; Student ID: 2500012789
- * Supports foreground/background jobs, signal forwarding, and redirection.
- * Job-table access is protected by blocking job-control signals.
+ * 姓名：尹璨；学号：2500012789
+ *
  */
 #include <assert.h>
 #include <stdio.h>
@@ -188,7 +187,7 @@ main(int argc, char **argv)
     exit(0); /* control never reaches here */
 }
 
-/* Block every signal whose handler reads or changes the job table. */
+/* 屏蔽所有会在处理函数中读取或修改作业表的信号。 */
 static void block_jobs(sigset_t *previous)
 {
     sigset_t mask;
@@ -199,14 +198,14 @@ static void block_jobs(sigset_t *previous)
         sio_error("Cannot block job-control signals\n");
 }
 
-/* Restore the caller's mask, including from a signal handler. */
+/* 恢复调用者原有的信号掩码，也可在信号处理函数中调用。 */
 static void restore_mask(const sigset_t *previous)
 {
     if (sigprocmask(SIG_SETMASK, previous, NULL) < 0)
         sio_error("Cannot restore signal mask\n");
 }
 
-/* Called with signals blocked; atomically unblock and wait for a change. */
+/* 在信号已屏蔽时调用，原子地恢复信号掩码并等待作业状态变化。 */
 static void wait_foreground(pid_t pid, const sigset_t *previous)
 {
     while (fgpid(job_list) == pid) {
@@ -215,7 +214,7 @@ static void wait_foreground(pid_t pid, const sigset_t *previous)
     }
 }
 
-/* Open redirection files without changing the shell's standard descriptors. */
+/* 打开重定向文件，保持 shell 自身的标准文件描述符不变。 */
 static int open_redirect(const char *path, int output)
 {
     int fd = output ? open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666) :
@@ -226,14 +225,14 @@ static int open_redirect(const char *path, int output)
     return fd;
 }
 
-/* Close only descriptors opened for redirection. */
+/* 只关闭为重定向而打开的文件描述符。 */
 static void close_redirect(int fd, int standard)
 {
     if (fd != standard && close(fd) < 0)
         unix_error("close error");
 }
 
-/* Resolve a builtin's PID/JID while the job table is protected. */
+/* 在作业表受保护时，解析内置命令的 PID 或 JID 并查找作业。 */
 static struct job_t *find_job(struct cmdline_tokens *tok, int *group)
 {
     char *arg = tok->argv[1];
@@ -274,7 +273,7 @@ static struct job_t *find_job(struct cmdline_tokens *tok, int *group)
     return job;
 }
 
-/* Builtins execute in the shell with job-control signals blocked. */
+/* 屏蔽作业控制信号后，在 shell 进程中执行内置命令。 */
 static void run_builtin(struct cmdline_tokens *tok, int output,
                         const sigset_t *previous)
 {
@@ -295,7 +294,7 @@ static void run_builtin(struct cmdline_tokens *tok, int output,
     if (tok->builtins == BUILTIN_KILL) {
         if (kill(group ? -pid : pid, SIGTERM) < 0 && errno != ESRCH)
             unix_error("kill error");
-        /* SIGCHLD alone decides whether a SIGTERM handler exited. */
+        /* 由 SIGCHLD 处理函数判断作业是否在处理 SIGTERM 后退出。 */
         return;
     }
 
@@ -308,7 +307,7 @@ static void run_builtin(struct cmdline_tokens *tok, int output,
         wait_foreground(pid, previous);
 }
 
-/* Launch an external command, then publish it before unblocking signals. */
+/* 启动外部命令，并在解除信号屏蔽前将其登记到作业表。 */
 static void run_external(struct cmdline_tokens *tok, int bg, int input,
                          int output, char *cmdline,
                          const sigset_t *previous)
@@ -352,8 +351,8 @@ static void run_external(struct cmdline_tokens *tok, int bg, int input,
         _exit(1);
     }
 
-    /* The parent also sets the group: forwarding is safe even if the child
-     * has not yet run. EACCES means the child already called execve. */
+    /* 父进程也设置进程组，确保子进程尚未运行时也能安全转发信号。
+     * EACCES 表示子进程已经调用了 execve。 */
     if (setpgid(pid, pid) < 0 && errno != EACCES && errno != ESRCH)
         unix_error("setpgid error");
     if (!addjob(job_list, pid, bg ? BG : FG, cmdline)) {
@@ -586,7 +585,7 @@ sigchld_handler(int sig)
     struct job_t *job;
 
     block_jobs(&previous);
-    /* Signals may coalesce, so drain all pending child state changes. */
+    /* 信号可能合并，因此需要循环处理所有待处理的子进程状态变化。 */
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         job = getjobpid(job_list, pid);
         if (job == NULL)
