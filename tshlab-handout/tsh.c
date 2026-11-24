@@ -1,7 +1,9 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and login ID here>
+ * Name: 尹璨; Student ID: 2500012789
+ * Supports foreground/background jobs, signal forwarding, and redirection.
+ * Job-table access is protected by blocking job-control signals.
  */
 #include <assert.h>
 #include <stdio.h>
@@ -15,6 +17,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <limits.h>
 
 /* Misc manifest constants */
 #define MAXLINE    1024   /* max line size */
@@ -185,6 +188,185 @@ main(int argc, char **argv)
     exit(0); /* control never reaches here */
 }
 
+/* Block every signal whose handler reads or changes the job table. */
+static void block_jobs(sigset_t *previous)
+{
+    sigset_t mask;
+
+    if (sigemptyset(&mask) < 0 || sigaddset(&mask, SIGCHLD) < 0 ||
+        sigaddset(&mask, SIGINT) < 0 || sigaddset(&mask, SIGTSTP) < 0 ||
+        sigprocmask(SIG_BLOCK, &mask, previous) < 0)
+        sio_error("Cannot block job-control signals\n");
+}
+
+/* Restore the caller's mask, including from a signal handler. */
+static void restore_mask(const sigset_t *previous)
+{
+    if (sigprocmask(SIG_SETMASK, previous, NULL) < 0)
+        sio_error("Cannot restore signal mask\n");
+}
+
+/* Called with signals blocked; atomically unblock and wait for a change. */
+static void wait_foreground(pid_t pid, const sigset_t *previous)
+{
+    while (fgpid(job_list) == pid) {
+        if (sigsuspend(previous) < 0 && errno != EINTR)
+            sio_error("sigsuspend error\n");
+    }
+}
+
+/* Open redirection files without changing the shell's standard descriptors. */
+static int open_redirect(const char *path, int output)
+{
+    int fd = output ? open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666) :
+                      open(path, O_RDONLY);
+
+    if (fd < 0)
+        fprintf(stderr, "Error: %s %s\n", path, strerror(errno));
+    return fd;
+}
+
+/* Close only descriptors opened for redirection. */
+static void close_redirect(int fd, int standard)
+{
+    if (fd != standard && close(fd) < 0)
+        unix_error("close error");
+}
+
+/* Resolve a builtin's PID/JID while the job table is protected. */
+static struct job_t *find_job(struct cmdline_tokens *tok, int *group)
+{
+    char *arg = tok->argv[1];
+    char *number, *end;
+    long id;
+    int is_jid;
+    struct job_t *job;
+
+    *group = 0;
+    if (arg == NULL) {
+        printf("%s command requires PID or %%jobid argument\n",
+               tok->argv[0]);
+        return NULL;
+    }
+    is_jid = arg[0] == '%';
+    number = arg + is_jid;
+    errno = 0;
+    id = strtol(number, &end, 10);
+    if (number == end || *end != '\0' || errno == ERANGE ||
+        id > INT_MAX || id < -INT_MAX || id == 0 ||
+        (id < 0 && tok->builtins != BUILTIN_KILL)) {
+        printf("%s: argument must be a PID or %%jobid\n", tok->argv[0]);
+        return NULL;
+    }
+    *group = id < 0;
+    if (*group)
+        id = -id;
+    job = is_jid ? getjobjid(job_list, (int)id) :
+                   getjobpid(job_list, (pid_t)id);
+    if (job == NULL) {
+        if (is_jid)
+            printf("%s: No such %s\n", arg,
+                   *group ? "process group" : "job");
+        else
+            printf("(%ld): No such %s\n", id,
+                   *group ? "process group" : "process");
+    }
+    return job;
+}
+
+/* Builtins execute in the shell with job-control signals blocked. */
+static void run_builtin(struct cmdline_tokens *tok, int output,
+                        const sigset_t *previous)
+{
+    struct job_t *job;
+    pid_t pid;
+    int group;
+
+    if (tok->builtins == BUILTIN_QUIT)
+        exit(0);
+    if (tok->builtins == BUILTIN_JOBS) {
+        listjobs(job_list, output);
+        return;
+    }
+    job = find_job(tok, &group);
+    if (job == NULL)
+        return;
+    pid = job->pid;
+    if (tok->builtins == BUILTIN_KILL) {
+        if (kill(group ? -pid : pid, SIGTERM) < 0 && errno != ESRCH)
+            unix_error("kill error");
+        /* SIGCHLD alone decides whether a SIGTERM handler exited. */
+        return;
+    }
+
+    if (kill(-pid, SIGCONT) < 0 && errno != ESRCH)
+        unix_error("kill SIGCONT error");
+    job->state = tok->builtins == BUILTIN_BG ? BG : FG;
+    if (job->state == BG)
+        printf("[%d] (%d) %s\n", job->jid, (int)pid, job->cmdline);
+    else
+        wait_foreground(pid, previous);
+}
+
+/* Launch an external command, then publish it before unblocking signals. */
+static void run_external(struct cmdline_tokens *tok, int bg, int input,
+                         int output, char *cmdline,
+                         const sigset_t *previous)
+{
+    pid_t pid;
+    int nohup = tok->builtins == BUILTIN_NOHUP;
+    char **argv = tok->argv + nohup;
+
+    if (*argv == NULL) {
+        printf("(null): Command not found\n");
+        return;
+    }
+    pid = fork();
+    if (pid < 0)
+        unix_error("fork error");
+    if (pid == 0) {
+        if (setpgid(0, 0) < 0)
+            sio_error("setpgid error\n");
+        Signal(SIGINT, SIG_DFL);
+        Signal(SIGTSTP, SIG_DFL);
+        Signal(SIGCHLD, SIG_DFL);
+        Signal(SIGQUIT, SIG_DFL);
+        Signal(SIGTTIN, SIG_DFL);
+        Signal(SIGTTOU, SIG_DFL);
+        if (nohup)
+            Signal(SIGHUP, SIG_IGN);
+        if (input != STDIN_FILENO) {
+            if (dup2(input, STDIN_FILENO) < 0)
+                sio_error("dup2 input error\n");
+            close_redirect(input, STDIN_FILENO);
+        }
+        if (output != STDOUT_FILENO) {
+            if (dup2(output, STDOUT_FILENO) < 0)
+                sio_error("dup2 output error\n");
+            close_redirect(output, STDOUT_FILENO);
+        }
+        restore_mask(previous);
+        execve(argv[0], argv, environ);
+        printf("%s: Command not found\n", argv[0]);
+        fflush(stdout);
+        _exit(1);
+    }
+
+    /* The parent also sets the group: forwarding is safe even if the child
+     * has not yet run. EACCES means the child already called execve. */
+    if (setpgid(pid, pid) < 0 && errno != EACCES && errno != ESRCH)
+        unix_error("setpgid error");
+    if (!addjob(job_list, pid, bg ? BG : FG, cmdline)) {
+        if (kill(-pid, SIGKILL) < 0 && errno != ESRCH)
+            unix_error("kill error");
+        return;
+    }
+    if (bg)
+        printf("[%d] (%d) %s\n", pid2jid(pid), (int)pid, cmdline);
+    else
+        wait_foreground(pid, previous);
+}
+
 /* 
  * eval - Evaluate the command line that the user has just typed in
  * 
@@ -196,21 +378,39 @@ main(int argc, char **argv)
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.  
  */
-void 
-eval(char *cmdline) 
+void
+eval(char *cmdline)
 {
-    int bg;              /* should the job run in bg or fg? */
+    int bg, input = STDIN_FILENO, output = STDOUT_FILENO;
     struct cmdline_tokens tok;
+    sigset_t previous;
 
-    /* Parse command line */
-    bg = parseline(cmdline, &tok); 
-
-    if (bg == -1) /* parsing error */
-        return;
-    if (tok.argv[0] == NULL) /* ignore empty lines */
+    bg = parseline(cmdline, &tok);
+    if (bg == -1 || tok.argv[0] == NULL)
         return;
 
-    return;
+    block_jobs(&previous);
+    if (tok.infile != NULL) {
+        input = open_redirect(tok.infile, 0);
+        if (input < 0)
+            goto done;
+    }
+    if (tok.outfile != NULL) {
+        output = open_redirect(tok.outfile, 1);
+        if (output < 0)
+            goto done;
+    }
+    if (tok.builtins == BUILTIN_NONE || tok.builtins == BUILTIN_NOHUP)
+        run_external(&tok, bg, input, output, cmdline, &previous);
+    else
+        run_builtin(&tok, output, &previous);
+
+done:
+    if (input >= 0)
+        close_redirect(input, STDIN_FILENO);
+    if (output >= 0)
+        close_redirect(output, STDOUT_FILENO);
+    restore_mask(&previous);
 }
 
 /* 
@@ -378,9 +578,36 @@ parseline(const char *cmdline, struct cmdline_tokens *tok)
  *     for any other currently running children to terminate.  
  */
 void 
-sigchld_handler(int sig) 
+sigchld_handler(int sig)
 {
-    return;
+    int saved_errno = errno, status;
+    pid_t pid;
+    sigset_t previous;
+    struct job_t *job;
+
+    block_jobs(&previous);
+    /* Signals may coalesce, so drain all pending child state changes. */
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+        job = getjobpid(job_list, pid);
+        if (job == NULL)
+            continue;
+        if (WIFSTOPPED(status)) {
+            job->state = ST;
+            if (sio_put("Job [%d] (%d) stopped by signal %d\n",
+                        job->jid, (int)pid, WSTOPSIG(status)) < 0)
+                sio_error("signal output error\n");
+        } else {
+            if (WIFSIGNALED(status) &&
+                sio_put("Job [%d] (%d) terminated by signal %d\n",
+                        job->jid, (int)pid, WTERMSIG(status)) < 0)
+                sio_error("signal output error\n");
+            deletejob(job_list, pid);
+        }
+    }
+    if (pid < 0 && errno != ECHILD && errno != EINTR)
+        sio_error("waitpid error\n");
+    restore_mask(&previous);
+    errno = saved_errno;
 }
 
 /* 
@@ -389,9 +616,18 @@ sigchld_handler(int sig)
  *    to the foreground job.  
  */
 void 
-sigint_handler(int sig) 
+sigint_handler(int sig)
 {
-    return;
+    int saved_errno = errno;
+    sigset_t previous;
+    pid_t pid;
+
+    block_jobs(&previous);
+    pid = fgpid(job_list);
+    if (pid > 0 && kill(-pid, SIGINT) < 0 && errno != ESRCH)
+        sio_error("signal forwarding error\n");
+    restore_mask(&previous);
+    errno = saved_errno;
 }
 
 /*
@@ -400,9 +636,18 @@ sigint_handler(int sig)
  *     foreground job by sending it a SIGTSTP.  
  */
 void 
-sigtstp_handler(int sig) 
+sigtstp_handler(int sig)
 {
-    return;
+    int saved_errno = errno;
+    sigset_t previous;
+    pid_t pid;
+
+    block_jobs(&previous);
+    pid = fgpid(job_list);
+    if (pid > 0 && kill(-pid, SIGTSTP) < 0 && errno != ESRCH)
+        sio_error("signal forwarding error\n");
+    restore_mask(&previous);
+    errno = saved_errno;
 }
 
 /*
